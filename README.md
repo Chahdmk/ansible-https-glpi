@@ -137,7 +137,3 @@ Les playbooks sont **idempotents** : on peut les relancer autant de fois qu'on v
 - Passer GLPI en HTTPS lui aussi et utiliser le dossier `public/` comme DocumentRoot.
 - Supprimer `install/install.php` après l'installation.
 - Passer la base en `utf8mb4`.
-
-## Captures d'écran
-
-_À ajouter dans `docs/captures/` : exécution des playbooks, page HTTPS d'apache01, page de connexion GLPI._
