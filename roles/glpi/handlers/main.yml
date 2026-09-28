@@ -1,0 +1,6 @@
+---
+- name: Restart Apache GLPI
+  ansible.builtin.service:
+    name: httpd
+    state: restarted
+    enabled: true

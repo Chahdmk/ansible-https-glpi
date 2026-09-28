@@ -1,0 +1,14 @@
+# Géré par Ansible — ne pas modifier à la main
+<VirtualHost *:80>
+    ServerName {{ inventory_hostname }}
+    DocumentRoot {{ glpi_dir }}
+
+    <Directory {{ glpi_dir }}>
+        # Autorise GLPI à utiliser ses fichiers .htaccess (réécritures, protections)
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog  /var/log/httpd/glpi_error.log
+    CustomLog /var/log/httpd/glpi_access.log combined
+</VirtualHost>

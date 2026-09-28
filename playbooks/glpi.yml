@@ -1,0 +1,7 @@
+---
+- name: Déploiement de GLPI sur AlmaLinux
+  hosts: glpi
+  become: true
+
+  roles:
+    - glpi

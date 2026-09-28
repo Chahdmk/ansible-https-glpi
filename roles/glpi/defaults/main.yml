@@ -1,0 +1,11 @@
+---
+# Version de GLPI à installer (branche 10.0.x)
+glpi_version: "10.0.18"
+glpi_dir: /var/www/html/glpi
+
+# Base de données
+glpi_db_name: glpi
+glpi_db_user: glpi
+# Ne jamais publier le vrai mot de passe : le surcharger avec ansible-vault
+# ou en ligne de commande (-e glpi_db_password=...).
+glpi_db_password: "ChangeMe123!"

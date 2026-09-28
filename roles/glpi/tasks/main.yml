@@ -1,0 +1,135 @@
+---
+# Bloc 1 — Apache (httpd), PHP et MariaDB
+- name: Installer paquets Web + PHP + DB
+  ansible.builtin.dnf:
+    name:
+      - httpd
+      - mariadb-server
+      - python3-PyMySQL   # requis par les modules community.mysql
+      - php
+      - php-mysqlnd
+      - php-xml
+      - php-gd
+      - php-cli
+      - php-mbstring
+      - php-json
+      - php-ldap
+      - php-opcache
+      - php-intl
+      - php-zip
+    state: present
+    update_cache: true
+
+# Bloc 2 — Démarrer et activer au boot
+- name: Activer et démarrer MariaDB
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Activer et démarrer Apache
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: true
+
+# Bloc 3 — Base GLPI (utf8) et utilisateur
+- name: Créer base GLPI (utf8)
+  community.mysql.mysql_db:
+    name: "{{ glpi_db_name }}"
+    state: present
+    encoding: utf8
+    collation: utf8_unicode_ci
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: Créer utilisateur GLPI
+  community.mysql.mysql_user:
+    name: "{{ glpi_db_user }}"
+    password: "{{ glpi_db_password }}"
+    host: localhost
+    priv: "{{ glpi_db_name }}.*:ALL"
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+  no_log: true
+
+# Bloc 4 — Télécharger et décompresser GLPI
+- name: Télécharger GLPI
+  ansible.builtin.get_url:
+    url: "https://github.com/glpi-project/glpi/releases/download/{{ glpi_version }}/glpi-{{ glpi_version }}.tgz"
+    dest: /tmp/glpi.tgz
+    mode: '0644'
+
+- name: Décompresser GLPI
+  ansible.builtin.unarchive:
+    src: /tmp/glpi.tgz
+    dest: /var/www/html/
+    remote_src: true
+    creates: "{{ glpi_dir }}"
+
+# Bloc 5 — Permissions (Apache doit pouvoir lire/écrire logs et fichiers)
+- name: Donner les droits à Apache sur GLPI
+  ansible.builtin.file:
+    path: "{{ glpi_dir }}"
+    owner: apache
+    group: apache
+    recurse: true
+
+- name: Corriger les permissions GLPI (dossiers)
+  ansible.builtin.command: find {{ glpi_dir }} -type d ! -perm 755 -print -exec chmod 755 {} +
+  register: perm_dirs
+  changed_when: perm_dirs.stdout != ""
+
+- name: Corriger les permissions GLPI (fichiers)
+  ansible.builtin.command: find {{ glpi_dir }} -type f ! -perm 644 -print -exec chmod 644 {} +
+  register: perm_files
+  changed_when: perm_files.stdout != ""
+
+# Bloc 6 — VirtualHost Apache pour GLPI
+- name: Déployer vhost GLPI
+  ansible.builtin.template:
+    src: glpi.conf.j2
+    dest: /etc/httpd/conf.d/glpi.conf
+    mode: '0644'
+  notify: Restart Apache GLPI
+
+# Bloc 7 — config_db.php (lu par bin/console db:install)
+- name: Déployer config_db.php
+  ansible.builtin.template:
+    src: config_db.php.j2
+    dest: "{{ glpi_dir }}/config/config_db.php"
+    owner: apache
+    group: apache
+    mode: '0640'
+
+# Bloc 8 — Installer la base GLPI en CLI (une seule fois)
+- name: Initialiser la base de données GLPI (CLI)
+  ansible.builtin.command: php bin/console db:install --no-interaction
+  args:
+    chdir: "{{ glpi_dir }}"
+    creates: "{{ glpi_dir }}/config/.ansible_db_installed"
+
+- name: Marquer la base comme installée
+  ansible.builtin.copy:
+    content: "Base GLPI initialisée par Ansible\n"
+    dest: "{{ glpi_dir }}/config/.ansible_db_installed"
+    owner: apache
+    group: apache
+    mode: '0640'
+    force: false
+
+# db:install tourne en root : on redonne à Apache les fichiers qu'il a créés
+- name: Redonner les droits à Apache après l'installation
+  ansible.builtin.file:
+    path: "{{ glpi_dir }}"
+    owner: apache
+    group: apache
+    recurse: true
+
+# Validation automatisée
+- name: Appliquer les redémarrages en attente avant de tester
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifier que GLPI répond
+  ansible.builtin.uri:
+    url: http://localhost/
+    status_code: [200, 302]

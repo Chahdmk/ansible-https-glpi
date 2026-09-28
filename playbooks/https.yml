@@ -1,0 +1,7 @@
+---
+- name: Apache HTTPS pour apache01
+  hosts: https
+  become: true
+
+  roles:
+    - apache_https

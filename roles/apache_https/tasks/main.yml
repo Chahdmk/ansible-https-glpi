@@ -1,0 +1,97 @@
+---
+# Bloc 1 — Installer Apache et les outils de certificats
+- name: Installer Apache et modules SSL
+  ansible.builtin.apt:
+    name:
+      - apache2
+      - openssl
+      - ssl-cert
+    state: present
+    update_cache: true
+
+# Bloc 2 — Activer les modules HTTPS (ssl) et headers
+- name: Activer le module ssl
+  ansible.builtin.command: a2enmod ssl
+  args:
+    creates: /etc/apache2/mods-enabled/ssl.load
+  notify: Restart Apache
+
+- name: Activer le module headers
+  ansible.builtin.command: a2enmod headers
+  args:
+    creates: /etc/apache2/mods-enabled/headers.load
+  notify: Restart Apache
+
+# Bloc 3 — Dossier du certificat
+- name: Créer le dossier SSL
+  ansible.builtin.file:
+    path: /etc/apache2/ssl
+    state: directory
+    mode: '0755'
+
+# Bloc 4 — Certificat autosigné (VM en NAT : Let's Encrypt ne peut pas valider)
+- name: Générer un certificat autosigné
+  ansible.builtin.command: >
+    openssl req -x509 -nodes -days 365
+    -newkey rsa:2048
+    -keyout /etc/apache2/ssl/https01.key
+    -out /etc/apache2/ssl/https01.crt
+    -subj "/C=CA/ST=QC/L=Montreal/O=TP/OU=INF/CN={{ inventory_hostname }}"
+  args:
+    creates: /etc/apache2/ssl/https01.crt
+
+# Bloc 5 — DocumentRoot + page d'accueil
+- name: Créer le dossier du site
+  ansible.builtin.file:
+    path: /var/www/{{ inventory_hostname }}
+    state: directory
+    mode: '0755'
+
+- name: Copier la page index.html
+  ansible.builtin.copy:
+    src: index.html
+    dest: /var/www/{{ inventory_hostname }}/index.html
+    mode: '0644'
+
+# Bloc 6 — VirtualHost HTTPS (443) + redirection HTTP (80) -> HTTPS
+- name: Copier le fichier de vhost
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: /etc/apache2/sites-available/https01.conf
+    mode: '0644'
+  notify: Restart Apache
+
+# Bloc 7 — Activer le site, désactiver le site par défaut
+- name: Activer le site https01
+  ansible.builtin.command: a2ensite https01
+  args:
+    creates: /etc/apache2/sites-enabled/https01.conf
+  notify: Restart Apache
+
+- name: Désactiver le site par défaut
+  ansible.builtin.command: a2dissite 000-default
+  args:
+    removes: /etc/apache2/sites-enabled/000-default.conf
+  notify: Restart Apache
+
+- name: Apache démarré et activé au boot
+  ansible.builtin.service:
+    name: apache2
+    state: started
+    enabled: true
+
+# Validation automatisée
+- name: Appliquer les redémarrages en attente avant de tester
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifier que le site répond en HTTPS
+  ansible.builtin.uri:
+    url: https://localhost/
+    validate_certs: false
+    status_code: 200
+
+- name: Vérifier la redirection HTTP -> HTTPS
+  ansible.builtin.uri:
+    url: http://localhost/
+    follow_redirects: none
+    status_code: 301

@@ -1,0 +1,9 @@
+<?php
+// Géré par Ansible — ne pas modifier à la main
+class DB extends DBmysql {
+   public $dbhost      = 'localhost';
+   public $dbuser      = '{{ glpi_db_user }}';
+   public $dbpassword  = '{{ glpi_db_password }}';
+   public $dbdefault   = '{{ glpi_db_name }}';
+   public $use_utf8mb4 = false;
+}

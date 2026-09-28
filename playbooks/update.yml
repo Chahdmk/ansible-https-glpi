@@ -1,0 +1,40 @@
+---
+# Mise à jour de tous les serveurs, peu importe la distribution.
+# Ansible détecte la famille d'OS (ansible_os_family) et choisit apt ou dnf.
+- name: Mettre à jour tous les serveurs
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Mise à jour Debian/Ubuntu (apt)
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        autoremove: true
+      when: ansible_os_family == "Debian"
+
+    - name: Mise à jour RHEL/AlmaLinux (dnf)
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      when: ansible_os_family == "RedHat"
+
+    - name: Vérifier si un redémarrage est requis (Debian/Ubuntu)
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_debian
+      when: ansible_os_family == "Debian"
+
+    - name: Vérifier si un redémarrage est requis (RHEL/AlmaLinux)
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_redhat
+      changed_when: false
+      failed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Redémarrer si nécessaire
+      ansible.builtin.reboot:
+      when: >
+        (reboot_debian.stat is defined and reboot_debian.stat.exists) or
+        (reboot_redhat.rc is defined and reboot_redhat.rc == 1)

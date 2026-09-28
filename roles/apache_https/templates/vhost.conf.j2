@@ -1,0 +1,27 @@
+# Géré par Ansible — ne pas modifier à la main
+
+# Site HTTPS (port 443) avec le certificat autosigné
+<VirtualHost *:443>
+    ServerName {{ inventory_hostname }}
+    DocumentRoot /var/www/{{ inventory_hostname }}
+
+    SSLEngine on
+    SSLCertificateFile    /etc/apache2/ssl/https01.crt
+    SSLCertificateKeyFile /etc/apache2/ssl/https01.key
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    <Directory /var/www/{{ inventory_hostname }}>
+        Require all granted
+    </Directory>
+
+    ErrorLog  ${APACHE_LOG_DIR}/https01_error.log
+    CustomLog ${APACHE_LOG_DIR}/https01_access.log combined
+</VirtualHost>
+
+# Port 80 : tout est redirigé vers HTTPS
+<VirtualHost *:80>
+    ServerName {{ inventory_hostname }}
+    Redirect permanent / https://{{ inventory_hostname }}/
+</VirtualHost>
